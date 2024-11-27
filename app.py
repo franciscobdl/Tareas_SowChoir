@@ -10,7 +10,16 @@ TAREAS_DB_ID = '14a02cf2f45180ce9b05cdf609a4a424'
 
 # Cargar datos desde Notion
 # @st.cache_data
+# Cargar datos desde Notion
 def cargar_datos():
+    """
+    Carga los datos desde las bases de datos de Notion y configura los DataFrames necesarios.
+    Devuelve:
+        - personas_df: DataFrame de personas con MultiIndex.
+        - tareas_df: DataFrame de tareas con MultiIndex.
+        - lista_personas: Lista de nombres de personas.
+        - lista_tareas: Lista de nombres de tareas.
+    """
     try:
         # Descargar datos desde Notion
         personas_df = notion_df.download(PERSONAS_DB_ID, api_key='ntn_HS754119761gePqHfm7JpMo1bp27qxK8fI1TgG6Q5eHgAz')
@@ -28,8 +37,6 @@ def cargar_datos():
     except Exception as e:
         st.error(f"Error al cargar datos desde Notion: {e}")
         return None, None, [], []
-
-    return personas_df, tareas_df, lista_personas, lista_tareas
 
 def get_feature(db, name, feature):
     return db.xs(name, level='nombre')[feature].iloc[0]
@@ -93,7 +100,7 @@ st.subheader("Selecciona personas y tareas")
 # Cargar datos cada vez que se actualiza la página o se asignan tareas
 personas_df, tareas_df, lista_personas, lista_tareas = cargar_datos()
 # st.dataframe(tareas_df.reset_index())
-st.dataframe(personas_df.reset_index())
+# st.dataframe(personas_df.reset_index())
 
 personas_seleccionadas = st.multiselect(
     "Selecciona las personas disponibles:",
