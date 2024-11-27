@@ -9,58 +9,27 @@ PERSONAS_DB_ID = "14a02cf2f45180c1ad14ca69293b1bed"
 TAREAS_DB_ID = '14a02cf2f45180ce9b05cdf609a4a424'
 
 # Cargar datos desde Notion
-@st.cache_data
+# @st.cache_data
 def cargar_datos():
-    # Descargar datos desde Notion
-    personas_df = notion_df.download(PERSONAS_DB_ID, api_key='ntn_HS754119761gePqHfm7JpMo1bp27qxK8fI1TgG6Q5eHgAz')
-    tareas_df = notion_df.download(TAREAS_DB_ID, api_key='ntn_HS754119761gePqHfm7JpMo1bp27qxK8fI1TgG6Q5eHgAz')
-
-    # Verificar columnas esperadas antes de configurar el MultiIndex
-    st.write("Columnas de personas_df:", personas_df.columns)
-    st.write("Columnas de tareas_df:", tareas_df.columns)
-
-    # Configurar MultiIndex para personas_df y tareas_df
     try:
+        # Descargar datos desde Notion
+        personas_df = notion_df.download(PERSONAS_DB_ID, api_key='ntn_HS754119761gePqHfm7JpMo1bp27qxK8fI1TgG6Q5eHgAz')
+        tareas_df = notion_df.download(TAREAS_DB_ID, api_key='ntn_HS754119761gePqHfm7JpMo1bp27qxK8fI1TgG6Q5eHgAz')
+
+        # Configurar MultiIndex para personas_df y tareas_df
         personas_df = personas_df.set_index([pd.Index(range(len(personas_df))), 'nombre'])
         tareas_df = tareas_df.set_index([pd.Index(range(len(tareas_df))), 'nombre'])
-    except KeyError as e:
-        st.error(f"Error al configurar el MultiIndex: {e}")
-        return None, None, None, None
 
-    # Obtener listas desde el nivel 'nombre' del índice
-    try:
+        # Obtener listas desde el nivel 'nombre' del índice
         lista_personas = personas_df.index.get_level_values('nombre').tolist()
         lista_tareas = tareas_df.index.get_level_values('nombre').tolist()
-    except KeyError as e:
-        st.error(f"Error al obtener niveles de índice 'nombre': {e}")
-        return None, None, None, None
 
-    # Verificar estructura final
-    st.write("Estructura de personas_df:", personas_df.index.names)
-    st.write("Estructura de tareas_df:", tareas_df.index.names)
+        return personas_df, tareas_df, lista_personas, lista_tareas
+    except Exception as e:
+        st.error(f"Error al cargar datos desde Notion: {e}")
+        return None, None, [], []
 
     return personas_df, tareas_df, lista_personas, lista_tareas
-
-# Cargar datos al inicio
-if "personas_df" not in st.session_state:
-    personas_df, tareas_df, lista_personas, lista_tareas = cargar_datos()
-    st.session_state.personas_df = personas_df
-    st.session_state.tareas_df = tareas_df
-    st.session_state.lista_personas = lista_personas
-    st.session_state.lista_tareas = lista_tareas
-else:
-    personas_df = st.session_state.personas_df
-    tareas_df = st.session_state.tareas_df
-    lista_personas = st.session_state.lista_personas
-    lista_tareas = st.session_state.lista_tareas
-
-# Verificar índices y columnas
-st.write("Índices de personas_df:", personas_df.index.names)
-st.write("Columnas de personas_df:", personas_df.columns)
-st.write("Índices de tareas_df:", tareas_df.index.names)
-st.write("Columnas de tareas_df:", tareas_df.columns)
-
-
 
 def get_feature(db, name, feature):
     return db.xs(name, level='nombre')[feature].iloc[0]
@@ -84,16 +53,22 @@ def asignar_tareas(personas_df, tareas_df, personas, tareas):
     asignaciones = [[],[],[],[],[],[],[],[]]
     for persona in personas:
         best = -1
+        aux = None
+        indx = None
         for tarea in tareas:
+            print(tarea)
             benef = beneficio(personas_df, tareas_df, persona, tarea)
             # print(benef, get_index(tareas_df,tarea),persona,tarea)
             pmax = get_feature(tareas_df,tarea,'npersonas')
-            aux = get_index(tareas_df,tarea)
+            aux = get_index(tareas_df,tarea) #posicion en el array de tareas
+            print(benef,best,len(asignaciones[aux])+1,pmax)
             if benef > best and len(asignaciones[aux])+1 <= pmax:
                 best = benef
                 # print('mejorado', benef, best)
                 indx = aux
-        asignaciones[indx].append(persona)
+                print('asignado')
+        if indx is not None:
+            asignaciones[indx].append(persona)
         # print('asignado: ', persona)
     return asignaciones
 
@@ -104,19 +79,22 @@ def asignar_tareas(personas_df, tareas_df, personas, tareas):
 #########################################################
 #########################################################
 
-
 # Interfaz de Streamlit
-st.title("Gestor de Tareas con Notion")
+st.title("Gestor de Tareas del Show Choir")
 
 # Mostrar los datos cargados
-st.write("Personas DF (Con MultiIndex):")
-st.dataframe(personas_df.reset_index())
+# # st.write("Personas DF (Con MultiIndex):")
 
-st.write("Tareas DF (Con MultiIndex):")
-st.dataframe(tareas_df.reset_index())
+# # st.write("Tareas DF (Con MultiIndex):")
 
 # Selección de personas y tareas
 st.subheader("Selecciona personas y tareas")
+
+# Cargar datos cada vez que se actualiza la página o se asignan tareas
+personas_df, tareas_df, lista_personas, lista_tareas = cargar_datos()
+# st.dataframe(tareas_df.reset_index())
+st.dataframe(personas_df.reset_index())
+
 personas_seleccionadas = st.multiselect(
     "Selecciona las personas disponibles:",
     options=lista_personas
@@ -129,20 +107,28 @@ tareas_seleccionadas = st.multiselect(
 
 # Ejecutar la asignación
 if st.button("Asignar Tareas"):
+
     if personas_seleccionadas and tareas_seleccionadas:
+        # Recargar datos para asegurarse de usar lo más actualizado
+        personas_df, tareas_df, lista_personas, lista_tareas = cargar_datos()
+
         # Ejecutar el algoritmo
         asignaciones = asignar_tareas(
             personas_df, tareas_df, personas_seleccionadas, tareas_seleccionadas
         )
-        # Preparar los resultados
-        resultados = []
-        for i, tarea in enumerate(tareas_seleccionadas):
-            for persona in asignaciones[i]:
-                resultados.append({"Tarea": tarea, "Persona": persona})
-        resultados_df = pd.DataFrame(resultados)
 
+        # Preparar los resultados
+        resultados = {'tarea': [], 'personas': []}
+        for tarea in lista_tareas:
+            resultados['tarea'].append(tarea)
+            resultados['personas'].append(asignaciones[get_index(tareas_df,tarea)]) 
+    
+
+        resultados_df = pd.DataFrame(resultados)
         # Mostrar los resultados
         st.success("Asignaciones realizadas con éxito:")
+        # st.write(resultados)
+        # st.write(resultados_df)
         st.dataframe(resultados_df)
     else:
         st.error("Por favor, selecciona al menos una persona y una tarea.")
